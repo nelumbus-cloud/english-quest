@@ -1,4 +1,4 @@
 interface CloudflareEnv {
-  ENGLISH_QUEST_KV: KVNamespace;
+  DB: D1Database;
   ELEVENLABS_API_KEY: string;
 }

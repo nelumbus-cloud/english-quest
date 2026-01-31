@@ -3,17 +3,39 @@ import { Word } from "@/types/inventory";
 
 export const runtime = 'edge';
 
+const USER_ID = "user:1";
+
 export async function GET() {
   const { env } = getRequestContext();
   
-  if (!env.ENGLISH_QUEST_KV) {
-    return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500 });
+  if (!env.DB) {
+    return new Response(JSON.stringify({ error: "Database not configured" }), { status: 500 });
+  }
+
+  // Lazy Init: Ensure table exists (Automatic Setup)
+  try {
+    await env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS words (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        definition TEXT NOT NULL,
+        level INTEGER DEFAULT 0,
+        addedAt INTEGER NOT NULL
+      )`
+    ).run();
+  } catch (err) {
+    // Ignore error if table already exists or permission issue, 
+    // let the query fail naturally if so.
+    console.error("Auto-migration failed:", err);
   }
 
   // Fetch words list
-  const wordsList = await env.ENGLISH_QUEST_KV.get("user:1:words", { type: "json" }) || [];
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM words WHERE user_id = ? ORDER BY addedAt DESC"
+  ).bind(USER_ID).all<Word>();
   
-  return new Response(JSON.stringify(wordsList), {
+  return new Response(JSON.stringify(results), {
     headers: { "Content-Type": "application/json" },
   });
 }
@@ -30,10 +52,17 @@ export async function POST(req: Request) {
     addedAt: Date.now(),
   };
 
-  const existing: Word[] = (await env.ENGLISH_QUEST_KV.get("user:1:words", { type: "json" })) || [];
-  const updated = [...existing, newWord];
+  if (!env.DB) {
+    return new Response(JSON.stringify({ error: "Database not configured" }), { status: 500 });
+  }
 
-  await env.ENGLISH_QUEST_KV.put("user:1:words", JSON.stringify(updated));
+  try {
+    await env.DB.prepare(
+      "INSERT INTO words (id, user_id, text, definition, level, addedAt) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(newWord.id, USER_ID, newWord.text, newWord.definition, newWord.level, newWord.addedAt).run();
 
-  return new Response(JSON.stringify(newWord), { status: 201 });
+    return new Response(JSON.stringify(newWord), { status: 201 });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "Failed to add word" }), { status: 500 });
+  }
 }

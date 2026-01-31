@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS words;
+CREATE TABLE words (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  definition TEXT NOT NULL,
+  level INTEGER DEFAULT 0,
+  addedAt INTEGER NOT NULL
+);
