@@ -26,25 +26,58 @@ export default function DojoPage() {
   const handleSendMessage = async () => {
     if (!inputVal.trim()) return;
 
+    // 1. Add User Message
+    const userText = inputVal;
     const newMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      text: inputVal,
+      text: userText,
     };
 
     setMessages((prev) => [...prev, newMsg]);
     setInputVal("");
 
-    // Simulate AI thinking and replying (Mock for UI dev)
-    setTimeout(() => {
+    // 2. Generate Coach Response (Mock Logic for now)
+    // In a real app, this would call /api/chat with an LLM
+    const coachText = `Interesting! You said "${userText}". Try enunciating the vowels more clearly.`;
+    const coachCorrection = "Make sure to stress the second syllable.";
+
+    // 3. Call TTS API
+    try {
+      const response = await fetch("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: coachText }),
+      });
+
+      if (!response.ok) throw new Error("TTS Failed");
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      // 4. Add Coach Message with Audio
       const coachMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "coach",
-        text: "That was good! However, instead of saying 'It is good', try 'It is exemplary'.",
-        correction: "It is exemplary.",
+        text: coachText,
+        correction: coachCorrection,
+        audioUrl: audioUrl,
       };
+      
       setMessages((prev) => [...prev, coachMsg]);
-    }, 1500);
+      audio.play();
+
+    } catch (err) {
+      console.error("Coach failed to speak:", err);
+      // Fallback text-only message
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: "coach",
+        text: coachText,
+        correction: coachCorrection
+      }]);
+    }
   };
 
   return (
@@ -87,8 +120,11 @@ export default function DojoPage() {
                     Suggestion: {msg.correction}
                   </div>
                 )}
-                {msg.role === "coach" && (
-                  <button className="mt-2 p-2 rounded-full hover:bg-slate-700 text-blue-400 transition-colors">
+                {msg.role === "coach" && msg.audioUrl && (
+                  <button 
+                    onClick={() => new Audio(msg.audioUrl).play()}
+                    className="mt-2 p-2 rounded-full hover:bg-slate-700 text-blue-400 transition-colors"
+                  >
                     <Play className="w-4 h-4" />
                   </button>
                 )}
